@@ -1,0 +1,1 @@
+(version 3)(allow default)(allow file-read-data file-read-metadata (subpath "/opt/homebrew/Cellar/sdl2/"))(allow process-exec)(allow process-fork)
