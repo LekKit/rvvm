@@ -579,9 +579,10 @@ static void engage_legacy_sandboxing(void) {
 
 #ifdef ISOLATION_GATEKEEPER_IMPL2
 static void engage_gatekeeper_sandboxing(void) {
-    char* errorbuf = "";
-    id NSHomeDirectory (void);
-    id NSFileManager (void);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        char* errorbuf = "";
+        id NSHomeDirectory (void);
+        id NSFileManager (void);
     
     /*
     const char nsfm = ((const char* (*)(id,SEL) &objc_getClass) (NSFileManager), sel_registerName("defaultFileManager"));
@@ -600,19 +601,19 @@ static void engage_gatekeeper_sandboxing(void) {
     // Parameters are passed as an array containing key,value,buff.
     // TODO: proper profile for rvvm and rvjit
     */
-   
-    int sandbox_init_with_parameters(const char *profile, uint64_t flags, const char *const parameters[], char **errorbuf);
-    const char profile[] = "(version 3)(allow default)(allow file-read-data file-read-metadata (subpath \"/opt/homebrew/Cellar/sdl2/\")(allow process-exec)(allow process-fork))";
-    const char* restrict_dir = ((const char* (*)(id,SEL, char *)) &objc_msgSend) (NSHomeDirectory(), sel_registerName("UTF8String"), errorbuf);
-    const char* parameters[] = { "USER_HOME_DIR", restrict_dir, NULL };
+        int sandbox_init_with_parameters(const char *profile, uint64_t flags, const char *const parameters[], char **errorbuf);
+        const char profile[] = "(version 3)(allow default)(allow file-read-data file-read-metadata (subpath \"/opt/homebrew/Cellar/sdl2/\"))(allow process-exec)";
+        const char* restrict_dir = ((const char* (*)(id,SEL, char *)) &objc_msgSend) (NSHomeDirectory(), sel_registerName("UTF8String"), errorbuf);
+        const char* parameters[] = { "USER_HOME_DIR", restrict_dir, NULL };
 
-    rvvm_debug("Attempting to sandbox...\nProfile is: %s restrict_dir is: %s", profile, restrict_dir);
-    
-    if (DO_ONCE(sandbox_init_with_parameters(profile, 0, parameters, &errorbuf))) {
-        rvvm_warn("Failed to enforce gatekeeper sandbox: %s!", errorbuf);
-    } else {
-        rvvm_info("Sandbox engaged successfully");
-    };
+        rvvm_debug("Attempting to sandbox...\nProfile is: %s restrict_dir is: %s", profile, restrict_dir);
+
+        if (sandbox_init_with_parameters(profile, 0, parameters, &errorbuf)) {
+            rvvm_warn("Failed to enforce gatekeeper sandbox: %s!", errorbuf);
+        } else {
+            rvvm_info("Sandbox engaged successfully");
+        };
+    });
 };
 #endif                                 
 
