@@ -566,7 +566,7 @@ static void engage_legacy_sandboxing(void) {
 	#endif
 	char* errorbuf = "";
    	if (sandbox_init(kSBXProfileNoWriteExceptTemporary, SANDBOX_NAMED, &errorbuf)) {
-       DO_ONCE(rvvm_warn("Failed to enforce gatekeeper: %s!", errorbuf));
+        DO_ONCE(rvvm_warn("Failed to enforce gatekeeper: %s!", errorbuf));
    	} else {
    	rvvm_info("Sandbox engaged successfully");
 	}
