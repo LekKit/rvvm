@@ -560,20 +560,22 @@ static void seccomp_setup_syscall_filter(bool all_threads) {
 
 #ifdef ISOLATION_GATEKEEPER_IMPL1
 static void engage_legacy_sandboxing(void) {
-	#if defined(__clang__)// && defined(__llvm__)
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-	#endif
-	char* errorbuf = "";
-   	if (sandbox_init(kSBXProfileNoWriteExceptTemporary, SANDBOX_NAMED, &errorbuf)) {
-        DO_ONCE(rvvm_warn("Failed to enforce gatekeeper: %s!", errorbuf));
-   	} else {
-   	rvvm_info("Sandbox engaged successfully");
-	}
-	sandbox_free_error(errorbuf);
-	#if defined(__clang__)// && defined(__llvm__)
-	#pragma clang diagnostic pop
-	#endif
+    dispatch_async(dispatch_get_main_queue(), ^{
+    	#if defined(__clang__)// && defined(__llvm__)
+    	#pragma clang diagnostic push
+    	#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    	#endif
+    	char* errorbuf = "";
+       	if (sandbox_init(kSBXProfileNoWriteExceptTemporary, SANDBOX_NAMED, &errorbuf)) {
+            DO_ONCE(rvvm_warn("Failed to enforce gatekeeper: %s!", errorbuf));
+       	} else {
+       	rvvm_info("Sandbox engaged successfully");
+    	}
+    	sandbox_free_error(errorbuf);
+    	#if defined(__clang__)// && defined(__llvm__)
+    	#pragma clang diagnostic pop
+    	#endif
+    });
 };
 #endif
 
