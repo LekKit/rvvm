@@ -558,7 +558,26 @@ static void seccomp_setup_syscall_filter(bool all_threads) {
 
 #endif
 
-#if defined(ISOLATION_GATEKEEPER_IMPL2)
+#ifdef ISOLATION_GATEKEEPER_IMPL1
+static void engage_legacy_sandboxing(void) {
+	#if defined(__clang__)// && defined(__llvm__)
+	#pragma clang diagnostic push
+	#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+	#endif
+	char* errorbuf = "";
+   	if (sandbox_init(kSBXProfileNoWriteExceptTemporary, SANDBOX_NAMED, &errorbuf)) {
+       DO_ONCE(rvvm_warn("Failed to enforce gatekeeper: %s!", errorbuf));
+   	} else {
+   	rvvm_info("Sandbox engaged successfully");
+	}
+	sandbox_free_error(errorbuf);
+	#if defined(__clang__)// && defined(__llvm__)
+	#pragma clang diagnostic pop
+	#endif
+};
+#endif
+
+#ifdef ISOLATION_GATEKEEPER_IMPL2
 static void engage_gatekeeper_sandboxing(void) {
     char* errorbuf = "";
     id NSHomeDirectory (void);
@@ -589,7 +608,7 @@ static void engage_gatekeeper_sandboxing(void) {
 
     rvvm_debug("Attempting to sandbox...\nProfile is: %s restrict_dir is: %s", profile, restrict_dir);
     
-    if (sandbox_init_with_parameters(profile, 0, parameters, &errorbuf)) {
+    if (DO_ONCE(sandbox_init_with_parameters(profile, 0, parameters, &errorbuf))) {
         rvvm_warn("Failed to enforce gatekeeper sandbox: %s!", errorbuf);
     } else {
         rvvm_info("Sandbox engaged successfully");
@@ -623,8 +642,8 @@ PUBLIC void rvvm_restrict_process(void)
     }
 #elif defined(ISOLATION_GATEKEEPER_IMPL1)
     rvvm_warn("Legacy isolation used, may not work in newer versions!");
-    rvvm_warn("Not implemented!");
+	engage_legacy_sandboxing();
 #elif defined(ISOLATION_GATEKEEPER_IMPL2)
-    DO_ONCE(engage_gatekeeper_sandboxing());
+   	engage_gatekeeper_sandboxing();
 #endif
 }

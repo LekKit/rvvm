@@ -215,7 +215,7 @@ ifeq ($(USE_ISOLATION),2)
 # Foundation/Cocoa runtime
 override LDFLAGS += -lobjc -framework Cocoa
 endif
-ifeq ($(and $(if $(LTO_SUPPORTED),1),$(if $(filter 1,$(USE_DEBUG)$(USE_DEBUG_FULL)),1),$(if $(findstring clang,$(CC_INFO))$(findstring LLVM,$(CC_INFO))),1),)
+ifeq ($(and $(if $(LTO_SUPPORTED),1),$(if $(filter 1,$(USE_DEBUG)$(USE_DEBUG_FULL)),1),$(if $(findstring clang,$(CC_INFO))$(findstring LLVM,$(CC_INFO))),1),1)
 # Generate symbols properly with lto on debug on apple clang and darwin>=15.x
 override LDFLAGS += -Wl,-object_path_lto,$(BUILDDIR)/obj/lto
 # Generate dSYM symbol bundle explicitly on darwin>=15.x, currently messy and is not used but i'll leave it as todo
