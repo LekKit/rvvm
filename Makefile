@@ -211,15 +211,20 @@ endif
 ifneq (,$(findstring darwin,$(OS)))
 # Enable SDL2 on Darwin by default
 USE_SDL ?= 2
+USE_ISOLATION ?= 1
 ifeq ($(USE_ISOLATION),2)
 # Foundation/Cocoa runtime
 override LDFLAGS += -lobjc -framework Cocoa
 endif
-ifeq ($(and $(if $(LTO_SUPPORTED),1),$(if $(filter 1,$(USE_DEBUG)$(USE_DEBUG_FULL)),1),$(if $(findstring clang,$(CC_INFO))$(findstring LLVM,$(CC_INFO))),1),1)
+ifeq ($(and $(if $(LTO_SUPPORTED),1),$(if $(filter 1,$(USE_DEBUG)$(USE_DEBUG_FULL)),1),$(if $(findstring LLVM,$(CC_INFO)),1)),1)
+ifeq ($(if $(findstring clang,$(CC_INFO))),1)
 # Generate symbols properly with lto on debug on apple clang and darwin>=15.x
 override LDFLAGS += -Wl,-object_path_lto,$(BUILDDIR)/obj/lto
+endif
+ifeq ($(if $(findstring gcc,$(CC_INFO))),1)
 # Generate dSYM symbol bundle explicitly on darwin>=15.x, currently messy and is not used but i'll leave it as todo
-# override CFLAGS += -Wl, -dsym-dir $(BUILDDIR)/$(BINARY).dSYM
+override CFLAGS += -Wl, -dsym-dir $(BUILDDIR)/$(BINARY).dSYM
+endif
 endif
 endif
 
@@ -572,13 +577,12 @@ endif
 
 # Sign binaries on MacOS host
 ifneq (,$(findstring darwin,$(OS)),$(shell which codesign $(NULL_STDERR)),$(USE_EXPERIMENTAL_SHIT))
-ifeq ($(USE_ISOLATION),2)
+ifeq ($(USE_EXPERIMENTAL_SHIT),1)
 ENTITLEMENTS = $(SRCDIR)/bindings/macos_codesign/rvvm.entitlements
 # todo: fixup sdl2 loading while sandboxing is engaged, can't atm, should opt in as external lib
-# $(info $(WHITE)[$(GREEN)RPATH$(WHITE)] $(shell install_name_tool -change /opt/homebrew/Cellar/sdl2/*/lib/libSDL2-2.0.0.dylib @rpath/libSDL2-2.0.0.dylib $@ $(RESET)) 
 # todo: proper entitlements with a certificate authority
 override CODESIGN =	$(info $(WHITE)[$(GREEN)ENT$(WHITE)] $(shell plutil $(ENTITLEMENTS)) $(RESET)) \
-					$(info $(WHITE)[$(GREEN)CODESIGN$(WHITE)] $(shell codesign -s - -d -o runtime,library --timestamp --strict --verbose=4 --preserve-metadata=entitlements,requirements,flags,runtime --entitlements $(ENTITLEMENTS) $@ 2>&1) $(RESET)) \
+					$(info $(WHITE)[$(GREEN)CODESIGN$(WHITE)] $(shell codesign -s - --timestamp --strict --verbose=4 --preserve-metadata=entitlements,requirements,flags,runtime --entitlements $(ENTITLEMENTS) $@ 2>&1) $(RESET)) \
 					$(info $(WHITE)[$(GREEN)VERIFY$(WHITE)] $(shell spctl --assess --verbose=4 --type execute $@ 2>&1) $(RESET))
 endif
 endif
@@ -612,6 +616,7 @@ $(BINARY): $(OBJS)
 	$(info $(WHITE)[$(GREEN)LD$(WHITE)] $@ $(RESET))
 	@$(CC_LD) $(CFLAGS) $(OBJS) $(LDFLAGS) -o $@
 	@$(CODESIGN)
+
 
 # Shared library
 $(SHARED): $(LIB_OBJS)

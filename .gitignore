@@ -37,3 +37,6 @@ NUL
 
 # Explicitly allow our main makefile
 !/Makefile
+
+# Ignore test repo if there's any
+/test/

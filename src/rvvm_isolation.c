@@ -60,9 +60,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define ISOLATION_PLEDGE_IMPL
 #endif
 
-#if defined(__APPLE__) && (USE_EXPERIMENTAL_SHIT) && CHECK_INCLUDE(objc/objc-api.h, 0)
-#include <sys/stat.h>
-#include <xpc/xpc.h>
+#if defined(__APPLE__) && CHECK_INCLUDE(xpc/xpc.h, 0) && CHECK_INCLUDE(objc/objc-api.h, 0) 
+#include <dispatch/dispatch.h>
 #if USE_ISOLATION == 1
 // Isolate with legacy
 #include <sandbox.h>
@@ -558,35 +557,42 @@ static void seccomp_setup_syscall_filter(bool all_threads) {
 
 #endif
 
-#ifdef ISOLATION_GATEKEEPER_IMPL1
+#if defined(ISOLATION_GATEKEEPER_IMPL1) || defined(ISOLATION_GATEKEEPER_IMPL2)
+static void mac_sandbox_callback(void (*funcptr)(void)) {
+    void(*func) = funcptr;
+    if (!rvvm_has_arg("nogui")){
+        dispatch_async_f(dispatch_get_main_queue(), NULL, func);
+    } else {
+        funcptr();
+    };
+};
+#endif
+#if defined (ISOLATION_GATEKEEPER_IMPL1)
 static void engage_legacy_sandboxing(void) {
-    dispatch_async(dispatch_get_main_queue(), ^{
     	#if defined(__clang__)// && defined(__llvm__)
     	#pragma clang diagnostic push
     	#pragma clang diagnostic ignored "-Wdeprecated-declarations"
     	#endif
-    	char* errorbuf = "";
+        char* errorbuf = "";
        	if (sandbox_init(kSBXProfileNoWriteExceptTemporary, SANDBOX_NAMED, &errorbuf)) {
             DO_ONCE(rvvm_warn("Failed to enforce gatekeeper: %s!", errorbuf));
        	} else {
-       	rvvm_info("Sandbox engaged successfully");
+            rvvm_info("Sandbox engaged successfully");
     	}
-    	sandbox_free_error(errorbuf);
     	#if defined(__clang__)// && defined(__llvm__)
     	#pragma clang diagnostic pop
     	#endif
-    });
 };
-#endif
-
-#ifdef ISOLATION_GATEKEEPER_IMPL2
-static void engage_gatekeeper_sandboxing(void) {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        char* errorbuf = "";
-        id NSHomeDirectory (void);
-        id NSFileManager (void);
-    
-    /*
+#elif defined (ISOLATION_GATEKEEPER_IMPL2)
+static void engage_cocoa_sandboxing(void) {
+    char* errorbuf = "";
+    id NSHomeDirectory(void);
+    const char* restrict_dir = ((const char* (*)(id,SEL, char *)) &objc_msgSend) (NSHomeDirectory(), sel_registerName("UTF8String"), errorbuf);
+    const char profile[] = "(version 3)(allow default)(allow file-read-data file-read-metadata (subpath \"/opt/homebrew/Cellar/sdl2/\"))(allow process-exec)";
+    const char* parameters[] = { "USER_HOME_DIR", restrict_dir, NULL};        
+    int sandbox_init_with_parameters(const char *profile, uint64_t flags, const char *const parameters[], char **errorbuf);
+/*
+    id NSFileManager (void);
     const char nsfm = ((const char* (*)(id,SEL) &objc_getClass) (NSFileManager), sel_registerName("defaultFileManager"));
     const char sharedManager = ((const char* (*)(id,SEL)) &objc_msgSend) nsfm;
     id paths = objc_msgSend(NSFileManager, sel_getUid("URLsForDirectory:inDomains:"), 9, 1);
@@ -603,31 +609,30 @@ static void engage_gatekeeper_sandboxing(void) {
     // Parameters are passed as an array containing key,value,buff.
     // TODO: proper profile for rvvm and rvjit
     */
-        int sandbox_init_with_parameters(const char *profile, uint64_t flags, const char *const parameters[], char **errorbuf);
-        const char profile[] = "(version 3)(allow default)(allow file-read-data file-read-metadata (subpath \"/opt/homebrew/Cellar/sdl2/\"))(allow process-exec)";
-        const char* restrict_dir = ((const char* (*)(id,SEL, char *)) &objc_msgSend) (NSHomeDirectory(), sel_registerName("UTF8String"), errorbuf);
-        const char* parameters[] = { "USER_HOME_DIR", restrict_dir, NULL };
-
-        rvvm_debug("Attempting to sandbox...\nProfile is: %s restrict_dir is: %s", profile, restrict_dir);
-
-        if (sandbox_init_with_parameters(profile, 0, parameters, &errorbuf)) {
-            rvvm_warn("Failed to enforce gatekeeper sandbox: %s!", errorbuf);
-        } else {
-            rvvm_info("Sandbox engaged successfully");
-        };
-    });
+    rvvm_debug("Attempting to sandbox...\nProfile is: %s restrict_dir is: %s", profile, restrict_dir);
+    if (sandbox_init_with_parameters(profile, 0, parameters, &errorbuf)) {
+        rvvm_warn("Failed to enforce gatekeeper sandbox: %s!", errorbuf);
+    } else {
+        rvvm_info("Sandbox engaged successfully");
+    };
 };
 #endif                                 
 
 void rvvm_restrict_this_thread(void)
 {
-    rvvm_debug("We hit thread sandboxing stage...");
+    rvvm_debug("We hit thread #%i sandboxing stage...", 
+    #if defined(_WIN32)
+    GetCurrentProcessId()
+    #else
+    getpid()
+    #endif
+    );
     drop_root_user();
     drop_thread_caps();
 #if defined(ISOLATION_SECCOMP_IMPL) && !defined(SANITIZERS_PRESENT)
     seccomp_setup_syscall_filter(false);
 #endif
-    // No per-thread pledge on OpenBSD :c
+    // No per-thread pledge on OpenBSD or MacOS :c
 }
 
 PUBLIC void rvvm_restrict_process(void)
@@ -645,8 +650,8 @@ PUBLIC void rvvm_restrict_process(void)
     }
 #elif defined(ISOLATION_GATEKEEPER_IMPL1)
     rvvm_warn("Legacy isolation used, may not work in newer versions!");
-	engage_legacy_sandboxing();
+    mac_sandbox_callback(engage_legacy_sandboxing);
 #elif defined(ISOLATION_GATEKEEPER_IMPL2)
-   	engage_gatekeeper_sandboxing();
+   	mac_sandbox_callback(engage_cocoa_sandboxing);
 #endif
 }
